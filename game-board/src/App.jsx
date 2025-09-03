@@ -1,36 +1,28 @@
-import { Routes, Route, Link } from "react-router-dom";
-import SevenCards from "./pages/SevenCards";
+// src/App.jsx
+import { Routes, Route, Navigate } from "react-router-dom";
 
-function Home() {
-  return <h2 className="p-4">Welcome Home</h2>;
-}
-
-function Dashboard() {
-  return <h2 className="p-4">Dashboard</h2>;
-}
-
-function Judgement() {
-  return <h2 className="p-4">Judgement</h2>;
-}
+import "./App.css";
+import Home from "./pages/Home.jsx";
+import SevenCards from "./pages/SevenCards.jsx";
+import SevenCardsView from "./pages/SevenCardsView.jsx";
+import Judgement from "./pages/Judgement.jsx";
+import JudgementView from "./pages/JudgementView.jsx";
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Navbar */}
-      <nav className="bg-blue-600 text-white p-4 flex gap-4">
-        <Link to="/" className="hover:underline">Home</Link>
-        <Link to="/dashboard" className="hover:underline">Dashboard</Link>
-        <Link to="/seven-cards" className="hover:underline">Seven Cards</Link>
-        <Link to="/judgement" className="hover:underline">Judgement</Link>
-      </nav>
+    <Routes>
+      <Route path="/" element={<Home />} />
 
-      {/* Page Content */}
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-        <Route path="/seven-cards" element={<SevenCards />} />
-        <Route path="/judgement" element={<Judgement />} />
-      </Routes>
-    </div>
+      {/* Seven Cards */}
+      <Route path="/sevencards" element={<SevenCards />} />
+      <Route path="/sevencards/view/:id" element={<SevenCardsView />} />
+
+      {/* Judgement */}
+      <Route path="/judgement" element={<Judgement />} />
+      <Route path="/judgement/view/:id" element={<JudgementView />} />
+
+      {/* Fallback */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
