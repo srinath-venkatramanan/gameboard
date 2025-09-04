@@ -33,24 +33,13 @@ export default function Leaderboard() {
 
       const totalPlayers = new Set([...sevenPlayers, ...judPlayers]).size;
 
-      setSummary({
-        totalSevenGames,
-        totalJudgementGames,
-        totalPlayers,
-      });
+      setSummary({ totalSevenGames, totalJudgementGames, totalPlayers });
 
       // --- Seven Cards Stats ---
       if (sevenData && sevenData.length > 0) {
         const players = sevenData[0].players;
         const playerStats = players.reduce((acc, p) => {
-          acc[p] = {
-            firstWins: 0,
-            secondWins: 0,
-            defeats: 0,
-            zeros: 0,
-            maxScore65Or130: 0,
-            total: 0,
-          };
+          acc[p] = { firstWins: 0, secondWins: 0, defeats: 0, zeros: 0, maxScore65Or130: 0 };
           return acc;
         }, {});
 
@@ -58,35 +47,34 @@ export default function Leaderboard() {
           const totals = table.totals;
           const sorted = totals
             .map((score, idx) => ({ player: players[idx], score }))
-            .sort((a, b) => a.score - b.score);
+            .sort((a, b) => a.score - b.score); // less score wins
 
-          // 1st & 2nd
           playerStats[sorted[0].player].firstWins++;
           if (sorted[1]) playerStats[sorted[1].player].secondWins++;
 
-          // Defeat = last
           playerStats[sorted[sorted.length - 1].player].defeats++;
 
-          // Per-round scoring
           table.scores.forEach((row) => {
             row.forEach((val, idx) => {
               const score = parseInt(val) || 0;
-              playerStats[players[idx]].total += score;
               if (score === 0) playerStats[players[idx]].zeros++;
               if (score === 65 || score === 130) playerStats[players[idx]].maxScore65Or130++;
             });
           });
         });
 
-        // Consistency scoring system
-        const consistency = Object.entries(playerStats).map(([player, st]) => {
-          const score = -st.total + st.zeros * 5 + st.maxScore65Or130 * 2;
-          return { player, score };
-        });
-        const maxScore = Math.max(...consistency.map((c) => c.score));
-        const mostConsistent = consistency
-          .filter((c) => c.score === maxScore)
-          .map((c) => c.player);
+        // Weighted consistency
+        const consistencyScores = Object.entries(playerStats).map(([player, stats]) => ({
+          player,
+          score: stats.firstWins * 5 + stats.secondWins * 3 + stats.zeros * 4 + stats.maxScore65Or130 * 2
+        }));
+
+        consistencyScores.sort((a, b) => b.score - a.score);
+        const topScore = consistencyScores[0].score;
+        const mostConsistent = consistencyScores
+          .filter((p) => p.score === topScore)
+          .map((p) => p.player)
+          .join(", ");
 
         setSevenStats({ playerStats, mostConsistent });
       }
@@ -95,7 +83,7 @@ export default function Leaderboard() {
       if (judData && judData.length > 0) {
         const players = judData[0].players;
         const playerStats = players.reduce((acc, p) => {
-          acc[p] = { firstWins: 0, secondWins: 0, totals: [] };
+          acc[p] = { firstWins: 0, secondWins: 0 };
           return acc;
         }, {});
 
@@ -103,27 +91,32 @@ export default function Leaderboard() {
           const totals = table.totals;
           const sorted = totals
             .map((score, idx) => ({ player: players[idx], score }))
-            .sort((a, b) => b.score - a.score);
+            .sort((a, b) => b.score - a.score); // more score wins
 
           playerStats[sorted[0].player].firstWins++;
           if (sorted[1]) playerStats[sorted[1].player].secondWins++;
-
-          totals.forEach((val, idx) => {
-            playerStats[players[idx]].totals.push(val);
-          });
         });
 
-        // Consistency scoring
-        const consistency = Object.entries(playerStats).map(([player, st]) => {
-          const avg =
-            st.totals.reduce((a, b) => a + b, 0) / (st.totals.length || 1);
-          const bonus = st.totals.filter((s) => s % 2 === 0 || s % 3 === 0 || s % 5 === 0).length;
-          return { player, score: avg + bonus };
+        // Weighted consistency
+        const consistencyScores = Object.entries(playerStats).map(([player, stats]) => {
+          const playerTotals = judData.map((t) => t.totals[players.indexOf(player)]);
+          const positiveScores = playerTotals.filter((s) => s > 0).length;
+
+          const score =
+            stats.firstWins * 5 +
+            stats.secondWins * 3 +
+            positiveScores * 2 +
+            playerTotals.reduce((sum, val) => sum + (val % 10 !== 0 ? 1 : 0), 0); // +1 if not divisible by 10
+
+          return { player, score };
         });
-        const maxScore = Math.max(...consistency.map((c) => c.score));
-        const mostConsistent = consistency
-          .filter((c) => c.score === maxScore)
-          .map((c) => c.player);
+
+        consistencyScores.sort((a, b) => b.score - a.score);
+        const topScore = consistencyScores[0].score;
+        const mostConsistent = consistencyScores
+          .filter((p) => p.score === topScore)
+          .map((p) => p.player)
+          .join(", ");
 
         setJudgementStats({ playerStats, mostConsistent });
       }
@@ -132,28 +125,47 @@ export default function Leaderboard() {
     fetchStats();
   }, []);
 
-  // --- Helpers ---
-  const getMaxPlayers = (stats, key) => {
-    const maxVal = Math.max(...Object.values(stats).map((s) => s[key]));
-    return Object.entries(stats)
-      .filter(([_, s]) => s[key] === maxVal && maxVal > 0)
-      .map(([p, s]) => `${p} (${s[key]})`);
-  };
-
   const renderSevenStats = () => {
     if (!sevenStats) return <p>Loading...</p>;
     const stats = sevenStats.playerStats;
+
+    // Handle ties
+    const getTopPlayers = (key) => {
+      const maxValue = Math.max(...Object.values(stats).map((s) => s[key]));
+      return Object.entries(stats)
+        .filter(([, s]) => s[key] === maxValue)
+        .map(([p]) => p)
+        .join(", ");
+    };
 
     return (
       <div className="mb-12">
         <h2 className="text-xl font-bold mb-4">Seven Cards Statistics 7️⃣</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard title="Most Winning 1st" values={getMaxPlayers(stats, "firstWins")} />
-          <StatCard title="Most Winning 2nd" values={getMaxPlayers(stats, "secondWins")} />
-          <StatCard title="Most Consistent Player" values={sevenStats.mostConsistent} />
-          <StatCard title="Most Defeats" values={getMaxPlayers(stats, "defeats")} />
-          <StatCard title="Maximum 0's Score" values={getMaxPlayers(stats, "zeros")} />
-          <StatCard title="Maximum 65 / 130 Score" values={getMaxPlayers(stats, "maxScore65Or130")} />
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Winning 1st</h3>
+            <p>{getTopPlayers("firstWins")} ({Math.max(...Object.values(stats).map(s => s.firstWins))} wins)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Winning 2nd</h3>
+            <p>{getTopPlayers("secondWins")} ({Math.max(...Object.values(stats).map(s => s.secondWins))} wins)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Consistent Player</h3>
+            <p>{sevenStats.mostConsistent}</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Defeats</h3>
+            <p>{getTopPlayers("defeats")} ({Math.max(...Object.values(stats).map(s => s.defeats))} losses)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Maximum 0's Score</h3>
+            <p>{getTopPlayers("zeros")} ({Math.max(...Object.values(stats).map(s => s.zeros))} zeros)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Maximum 65 / 130 Score</h3>
+            <p>{getTopPlayers("maxScore65Or130")} ({Math.max(...Object.values(stats).map(s => s.maxScore65Or130))})</p>
+          </div>
         </div>
       </div>
     );
@@ -163,64 +175,47 @@ export default function Leaderboard() {
     if (!judgementStats) return <p>Loading...</p>;
     const stats = judgementStats.playerStats;
 
+    const getTopPlayers = (key) => {
+      const maxValue = Math.max(...Object.values(stats).map((s) => s[key]));
+      return Object.entries(stats)
+        .filter(([, s]) => s[key] === maxValue)
+        .map(([p]) => p)
+        .join(", ");
+    };
+
     return (
       <div className="mb-12">
         <h2 className="text-xl font-bold mb-4">Judgement Statistics 🎯</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <StatCard title="Most Winning 1st" values={getMaxPlayers(stats, "firstWins")} />
-          <StatCard title="Most Winning 2nd" values={getMaxPlayers(stats, "secondWins")} />
-          <StatCard title="Most Consistent Player" values={judgementStats.mostConsistent} />
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Winning 1st</h3>
+            <p>{getTopPlayers("firstWins")} ({Math.max(...Object.values(stats).map(s => s.firstWins))} wins)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Winning 2nd</h3>
+            <p>{getTopPlayers("secondWins")} ({Math.max(...Object.values(stats).map(s => s.secondWins))} wins)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Consistent Player</h3>
+            <p>{judgementStats.mostConsistent}</p>
+          </div>
         </div>
       </div>
     );
   };
 
   return (
-    <div className="flex flex-col items-center justify-start min-h-screen bg-gray-50 p-6">
-      <h1 className="text-3xl font-bold mb-6">Leaderboard 🏆</h1>
-
+    <div className="p-6 bg-gray-100 min-h-screen">
+      <h1 className="text-3xl font-bold mb-6">Leaderboard</h1>
       {summary && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12 w-full max-w-5xl">
-          <SummaryCard title="Total Seven Cards Games" value={summary.totalSevenGames} />
-          <SummaryCard title="Total Judgement Games" value={summary.totalJudgementGames} />
-          <SummaryCard title="Total Players" value={summary.totalPlayers} />
+        <div className="mb-12">
+          <p>Total Seven Cards Games: {summary.totalSevenGames}</p>
+          <p>Total Judgement Games: {summary.totalJudgementGames}</p>
+          <p>Total Players: {summary.totalPlayers}</p>
         </div>
       )}
-
       {renderSevenStats()}
       {renderJudgementStats()}
-
-      <div className="flex justify-center mt-8">
-        <button
-          onClick={() => navigate("/")}
-          className="bg-blue-500 text-black px-6 py-3 rounded hover:bg-blue-600"
-        >
-          Home
-        </button>
-      </div>
     </div>
   );
 }
-
-// --- Reusable UI Components ---
-const StatCard = ({ title, values }) => (
-  <div className="bg-white p-4 rounded shadow">
-    <h3 className="font-semibold mb-2">{title}</h3>
-    {Array.isArray(values) ? (
-      values.length > 0 ? (
-        values.map((v, i) => <p key={i}>{v}</p>)
-      ) : (
-        <p>—</p>
-      )
-    ) : (
-      <p>{values}</p>
-    )}
-  </div>
-);
-
-const SummaryCard = ({ title, value }) => (
-  <div className="bg-white p-4 rounded shadow text-center">
-    <h3 className="font-semibold mb-2">{title}</h3>
-    <p>{value}</p>
-  </div>
-);
