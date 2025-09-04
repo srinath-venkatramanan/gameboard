@@ -164,7 +164,7 @@ export default function Leaderboard() {
             <p>{mostZeros[0]} ({mostZeros[1].zeros} zeros)</p>
           </div>
           <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Maximum 65 / 130 Score</h3>
+            <h3 className="font-semibold mb-2">Maximum 65/130 Score</h3>
             <p>{most65Or130[0]} ({most65Or130[1].maxScore65Or130})</p>
           </div>
         </div>
@@ -206,11 +206,10 @@ export default function Leaderboard() {
 
     const mostFirst = Object.entries(stats).sort((a, b) => b[1].firstWins - a[1].firstWins)[0];
     const mostSecond = Object.entries(stats).sort((a, b) => b[1].secondWins - a[1].secondWins)[0];
-    const mostLast = Object.entries(stats).sort((a, b) => b[1].lastPlace - a[1].lastPlace)[0];
 
     return (
       <div className="mb-12 w-full max-w-6xl">
-        <h2 className="text-xl font-bold mb-4">Judgement Statistics 🃏</h2>
+        <h2 className="text-xl font-bold mb-4">Judgement Statistics 🎯</h2>
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -225,10 +224,6 @@ export default function Leaderboard() {
           <div className="bg-white p-4 rounded shadow">
             <h3 className="font-semibold mb-2">Most Consistent Player</h3>
             <p>{judgementStats.mostConsistent}</p>
-          </div>
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Most Last Place</h3>
-            <p>{mostLast[0]} ({mostLast[1].lastPlace} times)</p>
           </div>
         </div>
 
@@ -262,17 +257,26 @@ export default function Leaderboard() {
   return (
     <div className="p-6 bg-gray-100 min-h-screen">
       <button
-        className="mb-6 px-4 py-2 bg-blue-600 text-white rounded shadow"
+        className="mb-6 px-4 py-2 bg-blue-600 text-black rounded shadow"
         onClick={() => navigate("/")}
       >
         Home
       </button>
 
-      {summary && (
-        <div className="mb-8 text-lg font-semibold">
-          <p>Total Seven Cards Games: {summary.totalSevenGames}</p>
-          <p>Total Judgement Games: {summary.totalJudgementGames}</p>
-          <p>Total Players: {summary.totalPlayers}</p>
+       {summary && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12 w-full max-w-5xl">
+          <div className="bg-white p-4 rounded shadow text-center">
+            <h3 className="font-semibold mb-2">Total Seven Cards Games</h3>
+            <p>{summary.totalSevenGames}</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow text-center">
+            <h3 className="font-semibold mb-2">Total Judgement Games</h3>
+            <p>{summary.totalJudgementGames}</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow text-center">
+            <h3 className="font-semibold mb-2">Total Players</h3>
+            <p>{summary.totalPlayers}</p>
+          </div>
         </div>
       )}
 
