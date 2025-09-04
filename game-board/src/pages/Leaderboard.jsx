@@ -43,7 +43,14 @@ export default function Leaderboard() {
       if (sevenData && sevenData.length > 0) {
         const players = sevenData[0].players;
         const playerStats = players.reduce((acc, p) => {
-          acc[p] = { firstWins: 0, secondWins: 0, defeats: 0, zeros: 0, maxScore65Or130: 0 };
+          acc[p] = {
+            firstWins: 0,
+            secondWins: 0,
+            defeats: 0,
+            zeros: 0,
+            maxScore65Or130: 0,
+            total: 0,
+          };
           return acc;
         }, {});
 
@@ -53,28 +60,33 @@ export default function Leaderboard() {
             .map((score, idx) => ({ player: players[idx], score }))
             .sort((a, b) => a.score - b.score);
 
+          // 1st & 2nd
           playerStats[sorted[0].player].firstWins++;
           if (sorted[1]) playerStats[sorted[1].player].secondWins++;
 
+          // Defeat = last
           playerStats[sorted[sorted.length - 1].player].defeats++;
 
+          // Per-round scoring
           table.scores.forEach((row) => {
             row.forEach((val, idx) => {
               const score = parseInt(val) || 0;
+              playerStats[players[idx]].total += score;
               if (score === 0) playerStats[players[idx]].zeros++;
               if (score === 65 || score === 130) playerStats[players[idx]].maxScore65Or130++;
             });
           });
         });
 
-        const consistency = players.map((p, idx) => {
-          const playerTotals = sevenData.map((t) => t.totals[idx]);
-          const avg = playerTotals.reduce((a, b) => a + b, 0) / playerTotals.length;
-          const variance =
-            playerTotals.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / playerTotals.length;
-          return { player: p, std: Math.sqrt(variance) };
+        // Consistency scoring system
+        const consistency = Object.entries(playerStats).map(([player, st]) => {
+          const score = -st.total + st.zeros * 5 + st.maxScore65Or130 * 2;
+          return { player, score };
         });
-        const mostConsistent = consistency.sort((a, b) => a.std - b.std)[0].player;
+        const maxScore = Math.max(...consistency.map((c) => c.score));
+        const mostConsistent = consistency
+          .filter((c) => c.score === maxScore)
+          .map((c) => c.player);
 
         setSevenStats({ playerStats, mostConsistent });
       }
@@ -83,7 +95,7 @@ export default function Leaderboard() {
       if (judData && judData.length > 0) {
         const players = judData[0].players;
         const playerStats = players.reduce((acc, p) => {
-          acc[p] = { firstWins: 0, secondWins: 0 };
+          acc[p] = { firstWins: 0, secondWins: 0, totals: [] };
           return acc;
         }, {});
 
@@ -95,16 +107,23 @@ export default function Leaderboard() {
 
           playerStats[sorted[0].player].firstWins++;
           if (sorted[1]) playerStats[sorted[1].player].secondWins++;
+
+          totals.forEach((val, idx) => {
+            playerStats[players[idx]].totals.push(val);
+          });
         });
 
-        const consistency = players.map((p, idx) => {
-          const playerTotals = judData.map((t) => t.totals[idx]);
-          const avg = playerTotals.reduce((a, b) => a + b, 0) / playerTotals.length;
-          const variance =
-            playerTotals.reduce((a, b) => a + Math.pow(b - avg, 2), 0) / playerTotals.length;
-          return { player: p, std: Math.sqrt(variance) };
+        // Consistency scoring
+        const consistency = Object.entries(playerStats).map(([player, st]) => {
+          const avg =
+            st.totals.reduce((a, b) => a + b, 0) / (st.totals.length || 1);
+          const bonus = st.totals.filter((s) => s % 2 === 0 || s % 3 === 0 || s % 5 === 0).length;
+          return { player, score: avg + bonus };
         });
-        const mostConsistent = consistency.sort((a, b) => a.std - b.std)[0].player;
+        const maxScore = Math.max(...consistency.map((c) => c.score));
+        const mostConsistent = consistency
+          .filter((c) => c.score === maxScore)
+          .map((c) => c.player);
 
         setJudgementStats({ playerStats, mostConsistent });
       }
@@ -113,46 +132,28 @@ export default function Leaderboard() {
     fetchStats();
   }, []);
 
+  // --- Helpers ---
+  const getMaxPlayers = (stats, key) => {
+    const maxVal = Math.max(...Object.values(stats).map((s) => s[key]));
+    return Object.entries(stats)
+      .filter(([_, s]) => s[key] === maxVal && maxVal > 0)
+      .map(([p, s]) => `${p} (${s[key]})`);
+  };
+
   const renderSevenStats = () => {
     if (!sevenStats) return <p>Loading...</p>;
     const stats = sevenStats.playerStats;
-
-    const mostFirst = Object.entries(stats).sort((a, b) => b[1].firstWins - a[1].firstWins)[0];
-    const mostSecond = Object.entries(stats).sort((a, b) => b[1].secondWins - a[1].secondWins)[0];
-    const mostDefeats = Object.entries(stats).sort((a, b) => b[1].defeats - a[1].defeats)[0];
-    const mostZeros = Object.entries(stats).sort((a, b) => b[1].zeros - a[1].zeros)[0];
-    const most65Or130 = Object.entries(stats).sort(
-      (a, b) => b[1].maxScore65Or130 - a[1].maxScore65Or130
-    )[0];
 
     return (
       <div className="mb-12">
         <h2 className="text-xl font-bold mb-4">Seven Cards Statistics 7️⃣</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Most Winning 1st</h3>
-            <p>{mostFirst[0]} ({mostFirst[1].firstWins} wins)</p>
-          </div>
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Most Winning 2nd</h3>
-            <p>{mostSecond[0]} ({mostSecond[1].secondWins} wins)</p>
-          </div>
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Most Consistent Player</h3>
-            <p>{sevenStats.mostConsistent}</p>
-          </div>
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Most Defeats</h3>
-            <p>{mostDefeats[0]} ({mostDefeats[1].defeats} losses)</p>
-          </div>
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Maximum 0's Score</h3>
-            <p>{mostZeros[0]} ({mostZeros[1].zeros} zeros)</p>
-          </div>
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Maximum 65 / 130 Score</h3>
-            <p>{most65Or130[0]} ({most65Or130[1].maxScore65Or130})</p>
-          </div>
+          <StatCard title="Most Winning 1st" values={getMaxPlayers(stats, "firstWins")} />
+          <StatCard title="Most Winning 2nd" values={getMaxPlayers(stats, "secondWins")} />
+          <StatCard title="Most Consistent Player" values={sevenStats.mostConsistent} />
+          <StatCard title="Most Defeats" values={getMaxPlayers(stats, "defeats")} />
+          <StatCard title="Maximum 0's Score" values={getMaxPlayers(stats, "zeros")} />
+          <StatCard title="Maximum 65 / 130 Score" values={getMaxPlayers(stats, "maxScore65Or130")} />
         </div>
       </div>
     );
@@ -160,27 +161,15 @@ export default function Leaderboard() {
 
   const renderJudgementStats = () => {
     if (!judgementStats) return <p>Loading...</p>;
-
     const stats = judgementStats.playerStats;
-    const mostFirst = Object.entries(stats).sort((a, b) => b[1].firstWins - a[1].firstWins)[0];
-    const mostSecond = Object.entries(stats).sort((a, b) => b[1].secondWins - a[1].secondWins)[0];
 
     return (
       <div className="mb-12">
         <h2 className="text-xl font-bold mb-4">Judgement Statistics 🎯</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Most Winning 1st</h3>
-            <p>{mostFirst[0]} ({mostFirst[1].firstWins} wins)</p>
-          </div>
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Most Winning 2nd</h3>
-            <p>{mostSecond[0]} ({mostSecond[1].secondWins} wins)</p>
-          </div>
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-semibold mb-2">Most Consistent Player</h3>
-            <p>{judgementStats.mostConsistent}</p>
-          </div>
+          <StatCard title="Most Winning 1st" values={getMaxPlayers(stats, "firstWins")} />
+          <StatCard title="Most Winning 2nd" values={getMaxPlayers(stats, "secondWins")} />
+          <StatCard title="Most Consistent Player" values={judgementStats.mostConsistent} />
         </div>
       </div>
     );
@@ -192,18 +181,9 @@ export default function Leaderboard() {
 
       {summary && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12 w-full max-w-5xl">
-          <div className="bg-white p-4 rounded shadow text-center">
-            <h3 className="font-semibold mb-2">Total Seven Cards Games</h3>
-            <p>{summary.totalSevenGames}</p>
-          </div>
-          <div className="bg-white p-4 rounded shadow text-center">
-            <h3 className="font-semibold mb-2">Total Judgement Games</h3>
-            <p>{summary.totalJudgementGames}</p>
-          </div>
-          <div className="bg-white p-4 rounded shadow text-center">
-            <h3 className="font-semibold mb-2">Total Players</h3>
-            <p>{summary.totalPlayers}</p>
-          </div>
+          <SummaryCard title="Total Seven Cards Games" value={summary.totalSevenGames} />
+          <SummaryCard title="Total Judgement Games" value={summary.totalJudgementGames} />
+          <SummaryCard title="Total Players" value={summary.totalPlayers} />
         </div>
       )}
 
@@ -221,3 +201,26 @@ export default function Leaderboard() {
     </div>
   );
 }
+
+// --- Reusable UI Components ---
+const StatCard = ({ title, values }) => (
+  <div className="bg-white p-4 rounded shadow">
+    <h3 className="font-semibold mb-2">{title}</h3>
+    {Array.isArray(values) ? (
+      values.length > 0 ? (
+        values.map((v, i) => <p key={i}>{v}</p>)
+      ) : (
+        <p>—</p>
+      )
+    ) : (
+      <p>{values}</p>
+    )}
+  </div>
+);
+
+const SummaryCard = ({ title, value }) => (
+  <div className="bg-white p-4 rounded shadow text-center">
+    <h3 className="font-semibold mb-2">{title}</h3>
+    <p>{value}</p>
+  </div>
+);

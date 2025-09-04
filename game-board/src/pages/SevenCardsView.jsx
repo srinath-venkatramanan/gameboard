@@ -107,6 +107,8 @@ export default function SevenCardsView() {
                             ? "bg-green-200"
                             : val === "65"
                             ? "bg-red-200"
+                            : val === "130"
+                            ? "bg-red-200"
                             : ""
                         }`}
                       >
