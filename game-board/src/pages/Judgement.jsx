@@ -14,41 +14,43 @@ export default function Judgement() {
     { name: "Numbers", symbol: "🔢", color: "text-blue-500" },
   ];
 
-  // Rounds as specified
   const rounds = [
-    { suit: shapes[0], cards: 10 }, // Spades
-    { suit: shapes[1], cards: 9 },  // Diamonds
-    { suit: shapes[2], cards: 8 },  // Clubs
-    { suit: shapes[3], cards: 7 },  // Hearts
-    { suit: shapes[4], cards: 6 },  // Numbers
-    { suit: shapes[0], cards: 5 },  // Spades
-    { suit: shapes[1], cards: 4 },  // Diamonds
-    { suit: shapes[2], cards: 3 },  // Clubs
-    { suit: shapes[3], cards: 2 },  // Hearts
-    { suit: shapes[4], cards: 1 },  // Numbers
-    { suit: shapes[4], cards: 10 }, // Numbers
-    { suit: shapes[3], cards: 9 },  // Hearts
-    { suit: shapes[2], cards: 8 },  // Clubs
-    { suit: shapes[1], cards: 7 },  // Diamonds
-    { suit: shapes[0], cards: 6 },  // Spades
-    { suit: shapes[4], cards: 5 },  // Numbers
-    { suit: shapes[3], cards: 4 },  // Hearts
-    { suit: shapes[2], cards: 3 },  // Clubs
-    { suit: shapes[1], cards: 2 },  // Diamonds
-    { suit: shapes[0], cards: 1 },  // Spades
+    { suit: shapes[0], cards: 10 },
+    { suit: shapes[1], cards: 9 },
+    { suit: shapes[2], cards: 8 },
+    { suit: shapes[3], cards: 7 },
+    { suit: shapes[4], cards: 6 },
+    { suit: shapes[0], cards: 5 },
+    { suit: shapes[1], cards: 4 },
+    { suit: shapes[2], cards: 3 },
+    { suit: shapes[3], cards: 2 },
+    { suit: shapes[4], cards: 1 },
+    { suit: shapes[4], cards: 10 },
+    { suit: shapes[3], cards: 9 },
+    { suit: shapes[2], cards: 8 },
+    { suit: shapes[1], cards: 7 },
+    { suit: shapes[0], cards: 6 },
+    { suit: shapes[4], cards: 5 },
+    { suit: shapes[3], cards: 4 },
+    { suit: shapes[2], cards: 3 },
+    { suit: shapes[1], cards: 2 },
+    { suit: shapes[0], cards: 1 },
   ];
 
   const [tableName, setTableName] = useState("");
   const [players, setPlayers] = useState(defaultPlayers);
   const [scores, setScores] = useState(
-    Array.from({ length: rounds.length }, () => Array(defaultPlayers.length).fill(""))
+    Array.from({ length: rounds.length }, () =>
+      Array(defaultPlayers.length).fill("")
+    )
   );
   const [previousTables, setPreviousTables] = useState([]);
   const [newPlayerName, setNewPlayerName] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
+  const [tableId, setTableId] = useState(null);
 
-  const isTableLocked = scores.some(row => row.some(cell => cell !== ""));
+  const isTableLocked = scores.some((row) => row.some((cell) => cell !== ""));
 
   useEffect(() => {
     const fetchTables = async () => {
@@ -68,7 +70,7 @@ export default function Judgement() {
     );
     setScores(newScores);
 
-    if (!isTableLocked && value.trim() !== "") {
+    if (value.trim() !== "") {
       await saveTable(newScores);
     }
   };
@@ -78,30 +80,45 @@ export default function Judgement() {
 
   const saveTable = async (updatedScores) => {
     if (!tableName.trim()) return;
-    const { error } = await supabase.from("score_tables").insert([
-      {
-        name: tableName,
-        game: "Judgement",
-        players,
-        scores: updatedScores,
-        totals: players.map((_, i) => getPlayerTotal(i)),
-        rounds,
-      },
-    ]);
-    if (error) alert("Failed to save table: " + error.message);
-    else {
-      const { data } = await supabase
+
+    if (tableId) {
+      const { error } = await supabase
         .from("score_tables")
-        .select("*")
-        .eq("game", "Judgement")
-        .order("created_at", { ascending: false });
-      if (data) setPreviousTables(data);
+        .update({
+          players,
+          scores: updatedScores,
+          totals: players.map((_, i) => getPlayerTotal(i)),
+        })
+        .eq("id", tableId);
+      if (error) alert("Failed to update table: " + error.message);
+    } else {
+      const { data, error } = await supabase
+        .from("score_tables")
+        .insert([
+          {
+            name: tableName,
+            game: "Judgement",
+            players,
+            scores: updatedScores,
+            totals: players.map((_, i) => getPlayerTotal(i)),
+            rounds,
+          },
+        ])
+        .select();
+      if (error) alert("Failed to save table: " + error.message);
+      else if (data && data[0]) setTableId(data[0].id);
     }
+
+    const { data } = await supabase
+      .from("score_tables")
+      .select("*")
+      .eq("game", "Judgement")
+      .order("created_at", { ascending: false });
+    if (data) setPreviousTables(data);
   };
 
-  // Dynamic column width based on longest player name
-  const maxNameLength = Math.max(...players.map(p => p.length));
-  const inputWidth = Math.max(maxNameLength * 12, 60); // 12px per char, min 60px
+  const maxNameLength = Math.max(...players.map((p) => p.length));
+  const inputWidth = Math.max(maxNameLength * 12, 60);
 
   const totalPages = Math.ceil(previousTables.length / itemsPerPage);
   const paginatedTables = previousTables.slice(
@@ -110,9 +127,18 @@ export default function Judgement() {
   );
 
   return (
-    <div className="flex justify-center p-4">
+    <div className="flex justify-center p-4 relative">
+      <div className="absolute top-4 right-4">
+        <button
+          onClick={() => navigate("/")}
+          className="bg-blue-500 text-black px-3 py-1 rounded hover:bg-blue-600"
+        >
+          Home
+        </button>
+      </div>
+
       <div className="w-full max-w-7xl">
-        <h1 className="text-2xl font-bold mb-4 text-center">Judgement Game</h1>
+        <h2 className="text-2xl font-bold mb-4 text-center">Judgement Game</h2>
 
         {/* Table Name */}
         <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-center">
@@ -129,13 +155,16 @@ export default function Judgement() {
         {/* Players */}
         <div className="mb-4 flex flex-wrap gap-2 items-center justify-center">
           {players.map((p, idx) => (
-            <div key={idx} className="flex items-center gap-1 bg-gray-200 px-2 py-1 rounded">
+            <div
+              key={idx}
+              className="flex items-center gap-1 bg-gray-200 px-2 py-1 rounded"
+            >
               <span>{p}</span>
               <button
                 onClick={() => {
                   if (!isTableLocked && players.length > 1) {
                     setPlayers(players.filter((_, i) => i !== idx));
-                    setScores(scores.map(row => row.filter((_, i) => i !== idx)));
+                    setScores(scores.map((row) => row.filter((_, i) => i !== idx)));
                   }
                 }}
                 className={`text-red-600 font-bold px-1 rounded hover:bg-red-100 ${
@@ -147,29 +176,27 @@ export default function Judgement() {
             </div>
           ))}
 
-          {!isTableLocked && (
-            <>
-              <input
-                type="text"
-                placeholder="New player name"
-                value={newPlayerName}
-                onChange={(e) => setNewPlayerName(e.target.value)}
-                className="border p-1 rounded"
-              />
-              <button
-                onClick={() => {
-                  if (newPlayerName.trim()) {
-                    setPlayers([...players, newPlayerName.trim()]);
-                    setScores(scores.map(row => [...row, ""]));
-                    setNewPlayerName("");
-                  }
-                }}
-                className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-              >
-                Add Player
-              </button>
-            </>
-          )}
+          <input
+            type="text"
+            placeholder="New player name"
+            value={newPlayerName}
+            onChange={(e) => setNewPlayerName(e.target.value)}
+            className="border p-1 rounded"
+            disabled={isTableLocked} // <-- disable after first score
+          />
+          <button
+            onClick={() => {
+              if (newPlayerName.trim()) {
+                setPlayers([...players, newPlayerName.trim()]);
+                setScores(scores.map((row) => [...row, ""]));
+                setNewPlayerName("");
+              }
+            }}
+            className="bg-blue-500 text-black px-2 py-1 rounded hover:bg-blue-600"
+            disabled={isTableLocked} // <-- disable after first score
+          >
+            Add Player
+          </button>
         </div>
 
         {/* Editable Table */}
@@ -177,7 +204,7 @@ export default function Judgement() {
           <table className="table-auto border-collapse border border-gray-400 text-center min-w-max">
             <thead>
               <tr>
-                <th className="border border-gray-400 p-2">Round</th>
+                <th className="border border-gray-400 p-2">Rounds/Players</th>
                 {players.map((p, idx) => (
                   <th key={idx} className="border border-gray-400 p-2">{p}</th>
                 ))}
@@ -189,18 +216,24 @@ export default function Judgement() {
                   <td className="border border-gray-400 p-2 text-left">
                     <div className="flex flex-col items-center">
                       <div className="flex flex-col border rounded overflow-hidden w-40">
-                        {/* Top row: shape symbol + name */}
                         <div className="flex">
-                          <div style={{ width: "30%" }} className="bg-white text-center p-2 border-r border-gray-300">
-                            <span className={`${r.suit.color} text-2xl leading-none`}>
+                          <div
+                            style={{ width: "30%" }}
+                            className="bg-white text-center p-2 border-r border-gray-300"
+                          >
+                            <span
+                              className={`${r.suit.color} text-2xl leading-none`}
+                            >
                               {r.suit.symbol}
                             </span>
                           </div>
-                          <div style={{ width: "70%" }} className="bg-gray-200 text-center p-2 text-sm font-medium">
+                          <div
+                            style={{ width: "70%" }}
+                            className="bg-gray-200 text-center p-2 text-sm font-medium"
+                          >
                             {r.suit.name}
                           </div>
                         </div>
-                        {/* Bottom row: cards play */}
                         <div className="bg-gray-50 text-center text-xs text-gray-500 p-1">
                           {r.cards} cards play
                         </div>
@@ -212,9 +245,12 @@ export default function Judgement() {
                       <input
                         type="number"
                         value={scores[rowIdx][colIdx]}
-                        onChange={(e) => handleChange(rowIdx, colIdx, e.target.value)}
+                        onChange={(e) =>
+                          handleChange(rowIdx, colIdx, e.target.value)
+                        }
                         className="p-1 text-center border rounded"
                         style={{ width: inputWidth }}
+                        disabled={!tableName.trim()} // <-- disable until table name
                       />
                     </td>
                   ))}
@@ -234,8 +270,10 @@ export default function Judgement() {
 
         {/* Previous Tables */}
         <div>
-          <h2 className="text-lg font-bold mb-2 text-center">Previous Tables</h2>
-          {previousTables.length === 0 && <p className="text-center">No previous tables found</p>}
+          <h2 className="text-lg font-bold mb-2 text-center">Previous Games</h2>
+          {previousTables.length === 0 && (
+            <p className="text-center">No previous games found</p>
+          )}
           <ul className="flex flex-col items-center">
             {paginatedTables.map((t) => (
               <li
@@ -243,16 +281,15 @@ export default function Judgement() {
                 className="cursor-pointer p-2 mb-2 bg-white rounded shadow hover:bg-gray-100 w-1/2 text-center"
                 onClick={() => navigate(`/judgement/view/${t.id}`)}
               >
-                {t.name} ({new Date(t.created_at).toLocaleDateString()})
+                {t.name}
               </li>
             ))}
           </ul>
 
-          {/* Pagination controls */}
           {totalPages > 1 && (
             <div className="flex justify-center gap-2 mt-2">
               <button
-                onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}
+                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
                 disabled={currentPage === 1}
                 className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50"
               >
@@ -262,7 +299,7 @@ export default function Judgement() {
                 Page {currentPage} of {totalPages}
               </span>
               <button
-                onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))}
+                onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
                 disabled={currentPage === totalPages}
                 className="px-2 py-1 bg-gray-200 rounded disabled:opacity-50"
               >

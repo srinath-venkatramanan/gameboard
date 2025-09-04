@@ -17,12 +17,11 @@ export default function SevenCards() {
   const [previousTables, setPreviousTables] = useState([]);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
-  const [tableId, setTableId] = useState(null); // store id of saved table
+  const [tableId, setTableId] = useState(null);
   const [newPlayerName, setNewPlayerName] = useState("");
 
   const isTableLocked = scores.some((row) => row.some((cell) => cell !== ""));
 
-  // Fetch previous tables
   useEffect(() => {
     const fetchTables = async () => {
       const { data, error } = await supabase
@@ -51,8 +50,8 @@ export default function SevenCards() {
 
   const saveTable = async (updatedScores) => {
     if (!tableName.trim()) return;
+
     if (tableId) {
-      // Update existing table
       const { error } = await supabase
         .from("score_tables")
         .update({
@@ -63,22 +62,23 @@ export default function SevenCards() {
         .eq("id", tableId);
       if (error) alert("Failed to update table: " + error.message);
     } else {
-      // Insert new table
-      const { data, error } = await supabase.from("score_tables").insert([
-        {
-          name: tableName,
-          game: "SevenCards",
-          players,
-          scores: updatedScores,
-          totals: players.map((_, i) => getPlayerTotal(i)),
-          rounds: defaultRounds,
-        },
-      ]).select();
+      const { data, error } = await supabase
+        .from("score_tables")
+        .insert([
+          {
+            name: tableName,
+            game: "SevenCards",
+            players,
+            scores: updatedScores,
+            totals: players.map((_, i) => getPlayerTotal(i)),
+            rounds: defaultRounds,
+          },
+        ])
+        .select();
       if (error) alert("Failed to save table: " + error.message);
       else if (data && data[0]) setTableId(data[0].id);
     }
 
-    // Refresh previous tables
     const { data } = await supabase
       .from("score_tables")
       .select("*")
@@ -95,24 +95,23 @@ export default function SevenCards() {
 
   return (
     <div className="flex justify-center p-4 relative">
-      {/* Home Tile Top-Right */}
       <div className="absolute top-4 right-4">
         <button
           onClick={() => navigate("/")}
-          className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+          className="bg-blue-500 text-black px-3 py-1 rounded hover:bg-blue-600"
         >
           Home
         </button>
       </div>
 
       <div className="w-full max-w-7xl">
-        <h1 className="text-2xl font-bold mb-4 text-center">Seven Cards Game</h1>
+        <h2 className="text-2xl font-bold mb-4 text-center">Seven Cards Game</h2>
 
         {/* Table Name */}
         <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 justify-center">
           <input
             type="text"
-            placeholder="Enter table name"
+            placeholder="Enter game name"
             className="border p-2 rounded w-full sm:w-1/2"
             value={tableName}
             onChange={(e) => setTableName(e.target.value)}
@@ -144,29 +143,27 @@ export default function SevenCards() {
             </div>
           ))}
 
-          {!isTableLocked && (
-            <>
-              <input
-                type="text"
-                placeholder="New player name"
-                value={newPlayerName}
-                onChange={(e) => setNewPlayerName(e.target.value)}
-                className="border p-1 rounded"
-              />
-              <button
-                onClick={() => {
-                  if (newPlayerName.trim()) {
-                    setPlayers([...players, newPlayerName.trim()]);
-                    setScores(scores.map((row) => [...row, ""]));
-                    setNewPlayerName("");
-                  }
-                }}
-                className="bg-blue-500 text-white px-2 py-1 rounded hover:bg-blue-600"
-              >
-                Add Player
-              </button>
-            </>
-          )}
+          <input
+            type="text"
+            placeholder="New player name"
+            value={newPlayerName}
+            onChange={(e) => setNewPlayerName(e.target.value)}
+            className="border p-1 rounded"
+            disabled={isTableLocked} // <-- disable after first score
+          />
+          <button
+            onClick={() => {
+              if (newPlayerName.trim()) {
+                setPlayers([...players, newPlayerName.trim()]);
+                setScores(scores.map((row) => [...row, ""]));
+                setNewPlayerName("");
+              }
+            }}
+            className="bg-blue-500 text-black px-2 py-1 rounded hover:bg-blue-600"
+            disabled={isTableLocked} // <-- disable after first score
+          >
+            Add Player
+          </button>
         </div>
 
         {/* Editable Table */}
@@ -174,7 +171,7 @@ export default function SevenCards() {
           <table className="table-auto border-collapse border border-gray-400 text-center min-w-max">
             <thead>
               <tr>
-                <th className="border border-gray-400 p-2">Game</th>
+                <th className="border border-gray-400 p-2">Games/Players</th>
                 {players.map((p, idx) => (
                   <th key={idx} className="border border-gray-400 p-2">{p}</th>
                 ))}
@@ -204,6 +201,7 @@ export default function SevenCards() {
                             handleChange(rowIdx, colIdx, e.target.value)
                           }
                           className="p-1 text-center border rounded w-24"
+                          disabled={!tableName.trim()} // <-- disable until table name
                         />
                       </td>
                     );
@@ -224,9 +222,9 @@ export default function SevenCards() {
 
         {/* Previous Tables */}
         <div>
-          <h2 className="text-lg font-bold mb-2 text-center">Previous Tables</h2>
+          <h2 className="text-lg font-bold mb-2 text-center">Previous Games</h2>
           {previousTables.length === 0 && (
-            <p className="text-center">No previous tables found</p>
+            <p className="text-center">No previous games found</p>
           )}
           <ul className="flex flex-col items-center">
             {paginatedTables.map((t) => (
@@ -235,12 +233,11 @@ export default function SevenCards() {
                 className="cursor-pointer p-2 mb-2 bg-white rounded shadow hover:bg-gray-100 w-3/4 text-center"
                 onClick={() => navigate(`/sevencards/view/${t.id}`)}
               >
-                {t.name} ({new Date(t.created_at).toLocaleDateString()})
+                {t.name}
               </li>
             ))}
           </ul>
 
-          {/* Pagination */}
           {totalPages > 1 && (
             <div className="flex justify-center gap-2 mt-2">
               <button
