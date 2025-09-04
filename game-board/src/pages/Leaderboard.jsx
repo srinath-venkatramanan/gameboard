@@ -8,8 +8,6 @@ export default function Leaderboard() {
   const [sevenStats, setSevenStats] = useState(null);
   const [judgementStats, setJudgementStats] = useState(null);
   const [summary, setSummary] = useState(null);
-  const [sevenDataState, setSevenDataState] = useState([]);
-  const [judDataState, setJudDataState] = useState([]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -23,9 +21,6 @@ export default function Leaderboard() {
         .select("*")
         .eq("game", "Judgement");
 
-      setSevenDataState(sevenData || []);
-      setJudDataState(judData || []);
-
       const totalSevenGames = sevenData?.length || 0;
       const totalJudgementGames = judData?.length || 0;
 
@@ -37,7 +32,11 @@ export default function Leaderboard() {
 
       const totalPlayers = new Set([...sevenPlayers, ...judPlayers]).size;
 
-      setSummary({ totalSevenGames, totalJudgementGames, totalPlayers });
+      setSummary({
+        totalSevenGames,
+        totalJudgementGames,
+        totalPlayers,
+      });
 
       // --- Seven Cards Stats ---
       if (sevenData && sevenData.length > 0) {
@@ -51,9 +50,9 @@ export default function Leaderboard() {
           const totals = table.totals;
           const sorted = totals
             .map((score, idx) => ({ player: players[idx], score }))
-            .sort((a, b) => a.score - b.score); // lower points win
+            .sort((a, b) => a.score - b.score); // lowest is winner
 
-          if (sorted[0]) playerStats[sorted[0].player].firstWins++;
+          playerStats[sorted[0].player].firstWins++;
           if (sorted[1]) playerStats[sorted[1].player].secondWins++;
           playerStats[sorted[sorted.length - 1].player].defeats++;
 
@@ -66,16 +65,20 @@ export default function Leaderboard() {
           });
         });
 
-        // Calculate consistency score
-        const consistency = players.map((p, idx) => {
+        // Consistency: lower total, more 0s, more 65/130
+        // eslint-disable-next-line no-unused-vars
+        const consistencyScores = players.map((p, idx) => {
           const stats = playerStats[p];
-          // Weight: zeros *4 + maxScore65Or130*2 + low total avg
-          const score = stats.zeros * 4 + stats.maxScore65Or130 * 2;
-          return { player: p, score };
+          return {
+            player: p,
+            score: stats.zeros * 4 + stats.maxScore65Or130 * 2,
+          };
         });
-
-        const maxConsScore = Math.max(...consistency.map((c) => c.score));
-        const mostConsistent = consistency.filter((c) => c.score === maxConsScore).map((c) => c.player).join(", ");
+        const mostConsistentScore = Math.max(...consistencyScores.map((c) => c.score));
+        const mostConsistent = consistencyScores
+          .filter((c) => c.score === mostConsistentScore)
+          .map((c) => c.player)
+          .join(", ");
 
         setSevenStats({ playerStats, mostConsistent });
       }
@@ -84,7 +87,7 @@ export default function Leaderboard() {
       if (judData && judData.length > 0) {
         const players = judData[0].players;
         const playerStats = players.reduce((acc, p) => {
-          acc[p] = { firstWins: 0, secondWins: 0 };
+          acc[p] = { firstWins: 0, secondWins: 0, lastPlace: 0 };
           return acc;
         }, {});
 
@@ -92,22 +95,28 @@ export default function Leaderboard() {
           const totals = table.totals;
           const sorted = totals
             .map((score, idx) => ({ player: players[idx], score }))
-            .sort((a, b) => b.score - a.score); // higher points win
+            .sort((a, b) => b.score - a.score); // highest is winner
 
-          if (sorted[0]) playerStats[sorted[0].player].firstWins++;
+          playerStats[sorted[0].player].firstWins++;
           if (sorted[1]) playerStats[sorted[1].player].secondWins++;
+          playerStats[sorted[sorted.length - 1].player].lastPlace++;
         });
 
-        // Consistency based on positive scores & non-divisible by 10
-        const consistency = players.map((p, idx) => {
-          const allScores = judData.flatMap((table) => table.scores.map((row) => parseInt(row[idx] || 0)));
-          const positive = allScores.filter((s) => s > 0).length;
-          const nonDiv10 = allScores.filter((s) => s % 10 !== 0 && s > 0).length;
-          return { player: p, score: positive + nonDiv10 };
+        // Consistency: total positive scores + weight for non-divisible by 10
+        const consistencyScores = players.map((p, idx) => {
+          const totals = judData.map((t) => t.totals[idx]);
+          const score = totals.reduce(
+            (acc, t) => acc + (t > 0 ? t : 0) + (t % 10 !== 0 ? 5 : 0),
+            0
+          );
+          return { player: p, score };
         });
 
-        const maxConsScore = Math.max(...consistency.map((c) => c.score));
-        const mostConsistent = consistency.filter((c) => c.score === maxConsScore).map((c) => c.player).join(", ");
+        const mostConsistentScore = Math.max(...consistencyScores.map((c) => c.score));
+        const mostConsistent = consistencyScores
+          .filter((c) => c.score === mostConsistentScore)
+          .map((c) => c.player)
+          .join(", ");
 
         setJudgementStats({ playerStats, mostConsistent });
       }
@@ -116,54 +125,6 @@ export default function Leaderboard() {
     fetchStats();
   }, []);
 
-  // --- Render Combined Table ---
-  const renderCombinedTable = () => {
-    if (!sevenStats || !judgementStats) return null;
-    const players = Object.keys(sevenStats.playerStats);
-
-    return (
-      <div className="overflow-x-auto mb-6">
-        <table className="min-w-full bg-white border border-gray-300 rounded shadow">
-          <thead>
-            <tr className="bg-gray-100 text-center">
-              <th className="border px-4 py-2">Player</th>
-              <th className="border px-4 py-2">7C 1st</th>
-              <th className="border px-4 py-2">7C 2nd</th>
-              <th className="border px-4 py-2">7C Last</th>
-              <th className="border px-4 py-2">7C Zeros</th>
-              <th className="border px-4 py-2">7C 65/130</th>
-              <th className="border px-4 py-2">Jud 1st</th>
-              <th className="border px-4 py-2">Jud 2nd</th>
-              <th className="border px-4 py-2">Jud Last</th>
-            </tr>
-          </thead>
-          <tbody>
-            {players.map((p) => {
-              const seven = sevenStats.playerStats[p];
-              const jud = judgementStats.playerStats[p] || { firstWins: 0, secondWins: 0 };
-              const judLast = judDataState ? judDataState.length - jud.firstWins - jud.secondWins : 0;
-
-              return (
-                <tr key={p} className="text-center">
-                  <td className="border px-4 py-2 font-semibold">{p}</td>
-                  <td className="border px-4 py-2">{seven.firstWins}</td>
-                  <td className="border px-4 py-2">{seven.secondWins}</td>
-                  <td className="border px-4 py-2">{seven.defeats}</td>
-                  <td className="border px-4 py-2">{seven.zeros}</td>
-                  <td className="border px-4 py-2">{seven.maxScore65Or130}</td>
-                  <td className="border px-4 py-2">{jud.firstWins}</td>
-                  <td className="border px-4 py-2">{jud.secondWins}</td>
-                  <td className="border px-4 py-2">{judLast}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
-  // --- Render Seven Cards Stats ---
   const renderSevenStats = () => {
     if (!sevenStats) return <p>Loading...</p>;
     const stats = sevenStats.playerStats;
@@ -177,63 +138,146 @@ export default function Leaderboard() {
     )[0];
 
     return (
-      <div className="mb-12">
+      <div className="mb-12 w-full max-w-6xl">
         <h2 className="text-xl font-bold mb-4">Seven Cards Statistics 7️⃣</h2>
-        <ul className="list-disc pl-6">
-          <li>Most Winning 1st: {mostFirst[0]} ({mostFirst[1].firstWins} wins)</li>
-          <li>Most Winning 2nd: {mostSecond[0]} ({mostSecond[1].secondWins} wins)</li>
-          <li>Most Consistent Player: {sevenStats.mostConsistent}</li>
-          <li>Most Defeats: {mostDefeats[0]} ({mostDefeats[1].defeats} losses)</li>
-          <li>Maximum 0's Score: {mostZeros[0]} ({mostZeros[1].zeros} zeros)</li>
-          <li>Maximum 65 / 130 Score: {most65Or130[0]} ({most65Or130[1].maxScore65Or130})</li>
-        </ul>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Winning 1st</h3>
+            <p>{mostFirst[0]} ({mostFirst[1].firstWins} wins)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Winning 2nd</h3>
+            <p>{mostSecond[0]} ({mostSecond[1].secondWins} wins)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Consistent Player</h3>
+            <p>{sevenStats.mostConsistent}</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Defeats</h3>
+            <p>{mostDefeats[0]} ({mostDefeats[1].defeats} losses)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Maximum 0's Score</h3>
+            <p>{mostZeros[0]} ({mostZeros[1].zeros} zeros)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Maximum 65 / 130 Score</h3>
+            <p>{most65Or130[0]} ({most65Or130[1].maxScore65Or130})</p>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white rounded shadow">
+            <thead>
+              <tr className="bg-gray-200">
+                <th className="px-4 py-2">Player</th>
+                <th className="px-4 py-2">1st Place</th>
+                <th className="px-4 py-2">2nd Place</th>
+                <th className="px-4 py-2">Last Place</th>
+                <th className="px-4 py-2">0s</th>
+                <th className="px-4 py-2">65/130</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(stats).map(([player, s]) => (
+                <tr key={player} className="text-center border-b">
+                  <td className="px-4 py-2">{player}</td>
+                  <td className="px-4 py-2">{s.firstWins}</td>
+                  <td className="px-4 py-2">{s.secondWins}</td>
+                  <td className="px-4 py-2">{s.defeats}</td>
+                  <td className="px-4 py-2">{s.zeros}</td>
+                  <td className="px-4 py-2">{s.maxScore65Or130}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   };
 
-  // --- Render Judgement Stats ---
   const renderJudgementStats = () => {
-    if (!judgementStats) return null;
+    if (!judgementStats) return <p>Loading...</p>;
     const stats = judgementStats.playerStats;
 
     const mostFirst = Object.entries(stats).sort((a, b) => b[1].firstWins - a[1].firstWins)[0];
     const mostSecond = Object.entries(stats).sort((a, b) => b[1].secondWins - a[1].secondWins)[0];
+    const mostLast = Object.entries(stats).sort((a, b) => b[1].lastPlace - a[1].lastPlace)[0];
 
     return (
-      <div className="mb-12">
+      <div className="mb-12 w-full max-w-6xl">
         <h2 className="text-xl font-bold mb-4">Judgement Statistics 🃏</h2>
-        <ul className="list-disc pl-6">
-          <li>Most Winning 1st: {mostFirst[0]} ({mostFirst[1].firstWins} wins)</li>
-          <li>Most Winning 2nd: {mostSecond[0]} ({mostSecond[1].secondWins} wins)</li>
-          <li>Most Consistent Player: {judgementStats.mostConsistent}</li>
-        </ul>
+
+        {/* Stats Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Winning 1st</h3>
+            <p>{mostFirst[0]} ({mostFirst[1].firstWins} wins)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Winning 2nd</h3>
+            <p>{mostSecond[0]} ({mostSecond[1].secondWins} wins)</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Consistent Player</h3>
+            <p>{judgementStats.mostConsistent}</p>
+          </div>
+          <div className="bg-white p-4 rounded shadow">
+            <h3 className="font-semibold mb-2">Most Last Place</h3>
+            <p>{mostLast[0]} ({mostLast[1].lastPlace} times)</p>
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white rounded shadow">
+            <thead>
+              <tr className="bg-gray-200">
+                <th className="px-4 py-2">Player</th>
+                <th className="px-4 py-2">1st Place</th>
+                <th className="px-4 py-2">2nd Place</th>
+                <th className="px-4 py-2">Last Place</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(stats).map(([player, s]) => (
+                <tr key={player} className="text-center border-b">
+                  <td className="px-4 py-2">{player}</td>
+                  <td className="px-4 py-2">{s.firstWins}</td>
+                  <td className="px-4 py-2">{s.secondWins}</td>
+                  <td className="px-4 py-2">{s.lastPlace}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Leaderboard 📊</h1>
+    <div className="p-6 bg-gray-100 min-h-screen">
+      <button
+        className="mb-6 px-4 py-2 bg-blue-600 text-white rounded shadow"
+        onClick={() => navigate("/")}
+      >
+        Home
+      </button>
 
       {summary && (
-        <div className="mb-4">
+        <div className="mb-8 text-lg font-semibold">
           <p>Total Seven Cards Games: {summary.totalSevenGames}</p>
           <p>Total Judgement Games: {summary.totalJudgementGames}</p>
           <p>Total Players: {summary.totalPlayers}</p>
         </div>
       )}
 
-      {renderCombinedTable()}
-
       {renderSevenStats()}
       {renderJudgementStats()}
-
-      <button
-        className="mt-6 px-4 py-2 bg-blue-500 text-black rounded shadow"
-        onClick={() => navigate("/")}
-      >
-        Home
-      </button>
     </div>
   );
 }
